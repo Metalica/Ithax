@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    ".opencode/project-context.md",
+    "C:\\Users\\Metal\\Desktop\\DB\\.opencode\\universal-rule.md"
+  ],
+  "references": {
+    "knowledge_base": {
+      "path": "C:\\Users\\Metal\\Desktop\\DB",
+      "description": "SQLite knowledge base with project metadata, file inventory, and fail-safe recovery. Query with: sqlite3 \"C:\\Users\\Metal\\Desktop\\DB\\knowledge_base.db\" \"SQL_QUERY\""
+    }
+  },
+  "skills": {
+    "paths": ["C:\\Users\\Metal\\Desktop\\DB\\.opencode\\skills"]
+  }
+}

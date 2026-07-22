@@ -1,0 +1,31 @@
+# EVE Client - build artifacts and tools
+build/
+tools/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Node
+node_modules/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Temp
+*.obj
+*.exe
+*.pdb
+*.lib
+*.exp
+*.log
