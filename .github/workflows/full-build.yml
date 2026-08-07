@@ -202,7 +202,7 @@ jobs:
             Invoke-WebRequest `
               -Uri "https://github.com/carbonengine/trinity/archive/4675ceaaa445f7fd44a1dc97472c8efa4ad8599c.tar.gz" `
               -OutFile $tarball
-            if ($LASTEXITCODE -ne 0) {
+            if (-not (Test-Path -LiteralPath $tarball -PathType Leaf)) {
               throw "Trinity tarball download failed"
             }
             tar -xzf $tarball -C "external\trinity"
@@ -212,7 +212,7 @@ jobs:
             Move-Item `
               -Path "external\trinity\trinity-4675ceaaa445f7fd44a1dc97472c8efa4ad8599c\trinityal" `
               -Destination $trinityDir
-            if ($LASTEXITCODE -ne 0) {
+            if (-not (Test-Path -LiteralPath $trinityDir -PathType Container)) {
               throw "TrinityAL move failed"
             }
           }
