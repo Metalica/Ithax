@@ -1,0 +1,23 @@
+{
+  "default-registry": {
+    "kind": "git",
+    "repository": "https://github.com/microsoft/vcpkg.git",
+    "baseline": "4493042c759d3bdff26164695dbee500d1e696c8"
+  },
+  "registries": [
+    {
+      "kind": "git",
+      "repository": "https://github.com/carbonengine/vcpkg-registry.git",
+      "baseline": "1477f954feb21b845d5aee75ccd3f6e0133f25cd",
+      "packages": [
+        "abseil",
+        "carbon-*",
+        "ccp-debug-info",
+        "openssl",
+        "protobuf",
+        "python3",
+        "zlib"
+      ]
+    }
+  ]
+}

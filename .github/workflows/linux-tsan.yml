@@ -1,0 +1,44 @@
+name: Linux ThreadSanitizer
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tsan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Configure Linux TSan harness
+        run: >-
+          cmake -S cmake/tsan -B build-linux-tsan -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++
+
+      - name: Build Linux TSan harness
+        run: cmake --build build-linux-tsan --parallel 2
+
+      - name: Run Linux TSan coverage
+        run: >-
+          ctest --test-dir build-linux-tsan --output-on-failure
+          --output-junit build-linux-tsan/Testing/tsan-junit.xml
+
+      - name: Upload TSan test evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: linux-tsan-evidence
+          path: build-linux-tsan/Testing
+          if-no-files-found: error

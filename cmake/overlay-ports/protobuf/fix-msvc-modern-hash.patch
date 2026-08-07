@@ -1,0 +1,36 @@
+--- a/src/google/protobuf/stubs/hash.h
++++ b/src/google/protobuf/stubs/hash.h
+@@ -238,6 +238,25 @@
+ #elif defined(_MSC_VER) && !defined(_STLPORT_VERSION) && \
+     !(defined(_LIBCPP_STD_VER) && _LIBCPP_STD_VER >= 11)
+ 
++#if _MSC_VER >= 1600
++
++template <typename Key>
++struct hash : public std::hash<Key> {
++};
++
++template <>
++struct hash<const char*> {
++  inline size_t operator()(const char* str) const {
++    size_t result = 0;
++    for (; *str != '\0'; str++) {
++      result = 5 * result + static_cast<size_t>(*str);
++    }
++    return result;
++  }
++};
++
++#else
++
+ template <typename Key>
+ struct hash : public GOOGLE_PROTOBUF_HASH_COMPARE<Key> {
+ };
+@@ -254,5 +273,7 @@
+ template <>
+ struct hash<const char*>
+     : public GOOGLE_PROTOBUF_HASH_COMPARE<const char*, CstringLess> {};
+ 
++#endif
++
+ #ifdef GOOGLE_PROTOBUF_CONTAINERS_NEED_HASH_COMPARE

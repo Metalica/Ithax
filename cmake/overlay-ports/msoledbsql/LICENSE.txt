@@ -1,0 +1,10 @@
+Microsoft OLE DB Driver for SQL Server
+
+This port retrieves the Microsoft OLE DB Driver for SQL Server from the
+official Microsoft distribution URL declared in portfile.cmake. The driver is
+proprietary software and is governed by the license terms supplied with the
+vendor installer. This notice is not a license grant or a replacement for
+those terms.
+
+Source and terms:
+https://learn.microsoft.com/en-us/sql/connect/oledb/oledb-driver-for-sql-server

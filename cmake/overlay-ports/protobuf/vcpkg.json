@@ -1,0 +1,27 @@
+{
+  "name": "protobuf",
+  "version-string": "3.6.0.1",
+  "description": "Protocol Buffers - Google's data interchange format",
+  "homepage": "https://github.com/protocolbuffers/protobuf",
+  "license": "BSD-3-Clause",
+  "features": {
+    "tools": {
+      "description": "Build the protocol compiler tools"
+    },
+    "pyext": {
+      "description": "Build the Python protobuf extension support library",
+      "dependencies": [
+        {
+          "name": "python3",
+          "version>=": "3.12.9#4"
+        }
+      ]
+    },
+    "zlib": {
+      "description": "ZLib based features like Gzip streams",
+      "dependencies": [
+        "zlib"
+      ]
+    }
+  }
+}

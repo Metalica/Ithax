@@ -1,0 +1,295 @@
+name: Full Build And Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-2022
+    timeout-minutes: 180
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Bootstrap pinned vcpkg
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Path "tools" -Force | Out-Null
+          git clone --no-checkout `
+            https://github.com/microsoft/vcpkg.git tools/vcpkg
+          if ($LASTEXITCODE -ne 0) {
+            throw "vcpkg clone failed with exit code $LASTEXITCODE"
+          }
+          git -C tools/vcpkg checkout `
+            4493042c759d3bdff26164695dbee500d1e696c8
+          if ($LASTEXITCODE -ne 0) {
+            throw "vcpkg checkout failed with exit code $LASTEXITCODE"
+          }
+          & ".\tools\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
+          if ($LASTEXITCODE -ne 0) {
+            throw "vcpkg bootstrap failed with exit code $LASTEXITCODE"
+          }
+          git config --global `
+            url."https://github.com/".insteadOf "git@github.com:"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Git URL configuration failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Restore vcpkg caches
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: |
+            tools/vcpkg/downloads
+            vcpkg-binary-cache
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/overlay-ports/**', 'cmake/triplets/**') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
+
+      - name: Configure vcpkg binary cache
+        shell: pwsh
+        run: |
+          $cachePath = Join-Path $env:GITHUB_WORKSPACE "vcpkg-binary-cache"
+          New-Item -ItemType Directory -Path $cachePath -Force | Out-Null
+          "VCPKG_DEFAULT_BINARY_CACHE=$cachePath" >> $env:GITHUB_ENV
+
+      - name: Build and test
+        shell: pwsh
+        run: |
+          $cmake = (Get-Command cmake.exe).Source
+          .\scripts\build.ps1 `
+            -CMakePath $cmake `
+            -InstallRoot vcpkg_installed-ci `
+            -BuildRoot build-ci `
+            -InstallDependencies
+
+      - name: Quality and release-boundary checks
+        shell: pwsh
+        run: |
+          .\scripts\quality.ps1 `
+            -PythonPath "vcpkg_installed-ci\x64-windows-debug\tools\python3\python.exe"
+
+      - name: License and SPDX evidence
+        shell: pwsh
+        run: |
+          .\scripts\supply-chain.ps1 `
+            -VcpkgPath ".\tools\vcpkg\vcpkg.exe" `
+            -InstallRoot "vcpkg_installed-ci" `
+            -OutputRoot "artifacts\supply-chain"
+
+      - name: Stage 3 optional-dependency acceptance
+        shell: pwsh
+        run: |
+          .\scripts\stage3-acceptance.ps1 `
+            -InstallRoot "vcpkg_installed-ci" `
+            -BuildRoot "build-ci" `
+            -OutputPath "artifacts\stage3-optional-acceptance.json" `
+            -RunMeasurements
+
+      - name: Stage 4 network protocol acceptance
+        shell: pwsh
+        run: |
+          .\scripts\stage4-fuzz.ps1 `
+            -Runs 100000 `
+            -OutputPath "artifacts\benchmarks\stage4-fuzz.jsonl"
+          .\scripts\stage4-acceptance.ps1 `
+            -InstallRoot "vcpkg_installed-ci" `
+            -BuildRoot "build-ci" `
+            -OutputPath "artifacts\stage4-acceptance.json"
+
+  stage5-vulkan:
+    runs-on: windows-2022
+    timeout-minutes: 180
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Bootstrap pinned vcpkg
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Path "tools" -Force | Out-Null
+          git clone --no-checkout `
+            https://github.com/microsoft/vcpkg.git tools/vcpkg
+          if ($LASTEXITCODE -ne 0) {
+            throw "vcpkg clone failed with exit code $LASTEXITCODE"
+          }
+          git -C tools/vcpkg checkout `
+            4493042c759d3bdff26164695dbee500d1e696c8
+          if ($LASTEXITCODE -ne 0) {
+            throw "vcpkg checkout failed with exit code $LASTEXITCODE"
+          }
+          & ".\tools\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
+          if ($LASTEXITCODE -ne 0) {
+            throw "vcpkg bootstrap failed with exit code $LASTEXITCODE"
+          }
+          git config --global `
+            url."https://github.com/".insteadOf "git@github.com:"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Git URL configuration failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Restore vcpkg caches
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: |
+            tools/vcpkg/downloads
+            vcpkg-binary-cache
+          key: vcpkg-stage5-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/overlay-ports/**', 'cmake/triplets/**') }}
+          restore-keys: |
+            vcpkg-stage5-${{ runner.os }}-
+
+      - name: Configure vcpkg binary cache
+        shell: pwsh
+        run: |
+          $cachePath = Join-Path $env:GITHUB_WORKSPACE "vcpkg-binary-cache"
+          New-Item -ItemType Directory -Path $cachePath -Force | Out-Null
+          "VCPKG_DEFAULT_BINARY_CACHE=$cachePath" >> $env:GITHUB_ENV
+
+      - name: Install Vulkan dependencies
+        shell: pwsh
+        run: |
+          $env:VCPKG_ROOT = ".\tools\vcpkg"
+          $installRoot = (Resolve-Path "vcpkg_installed-ci").Path
+          New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
+          $triplet = "x64-windows-debug"
+          & ".\tools\vcpkg\vcpkg.exe" install `
+            "carbon-core" `
+            "carbon-imageio" `
+            "carbon-mesh" `
+            "nvidia-aftermath" `
+            "nvidia-streamline" `
+            "nvidia-streamline-dlss-sr" `
+            "nvidia-streamline-dlss-fg" `
+            "nvidia-streamline-nis" `
+            "amd-fidelityfx-fsr" `
+            "vulkan" `
+            "vulkan-memory-allocator" `
+            "vulkan-validationlayers" `
+            "spirv-tools[tools]" `
+            "directx-dxc" `
+            "python3" `
+            --classic `
+            --triplet $triplet `
+            --x-install-root=$installRoot
+          if ($LASTEXITCODE -ne 0) {
+            throw "vcpkg install failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Fetch pinned Carbon Trinity source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $trinityDir = "external\trinity\trinityal"
+          if (Test-Path -LiteralPath $trinityDir) {
+            Write-Output "TrinityAL source already present"
+          } else {
+            New-Item -ItemType Directory -Path "external\trinity" -Force | Out-Null
+            $tarball = Join-Path $env:RUNNER_TEMP "trinity.tar.gz"
+            Invoke-WebRequest `
+              -Uri "https://github.com/carbonengine/trinity/archive/4675ceaaa445f7fd44a1dc97472c8efa4ad8599c.tar.gz" `
+              -OutFile $tarball
+            if ($LASTEXITCODE -ne 0) {
+              throw "Trinity tarball download failed"
+            }
+            tar -xzf $tarball -C "external\trinity"
+            if ($LASTEXITCODE -ne 0) {
+              throw "Trinity tarball extraction failed"
+            }
+            Move-Item `
+              -Path "external\trinity\trinity-4675ceaaa445f7fd44a1dc97472c8efa4ad8599c\trinityal" `
+              -Destination $trinityDir
+            if ($LASTEXITCODE -ne 0) {
+              throw "TrinityAL move failed"
+            }
+          }
+
+      - name: Configure and build TrinityAL Vulkan standalone
+        shell: pwsh
+        run: |
+          $cmake = (Get-Command cmake.exe).Source
+          $toolchain = (Resolve-Path ".\tools\vcpkg\scripts\buildsystems\vcpkg.cmake").Path
+          $installRoot = (Resolve-Path "vcpkg_installed-ci").Path
+          & $cmake -S "cmake\trinityal-standalone" -B "build-trinityal" `
+            -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_CONFIGURATION_TYPES=Debug `
+            -DCMAKE_TOOLCHAIN_FILE=$toolchain `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-debug `
+            -DVCPKG_INSTALLED_DIR=$installRoot `
+            -DVCPKG_MANIFEST_INSTALL=OFF
+          if ($LASTEXITCODE -ne 0) {
+            throw "CMake configure failed with exit code $LASTEXITCODE"
+          }
+          & $cmake --build "build-trinityal" --config Debug --parallel 1
+          if ($LASTEXITCODE -ne 0) {
+            throw "CMake build failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Stage 5 TrinityAL Vulkan acceptance
+        shell: pwsh
+        run: |
+          .\scripts\stage5-acceptance.ps1 `
+            -InstallRoot "vcpkg_installed-ci" `
+            -BuildRoot "build-trinityal" `
+            -OutputPath "artifacts\stage5-acceptance.json" `
+            -FailOnOpenGates
+
+      - name: Upload Stage 5 evidence
+        if: always() && hashFiles('artifacts/stage5*') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stage5-vulkan-evidence
+          path: artifacts\stage5*.json
+          if-no-files-found: error
+
+      - name: Reproducibility evidence
+        shell: pwsh
+        run: |
+          .\scripts\reproducibility.ps1 `
+            -InstallRoot "vcpkg_installed-ci" `
+            -BuildRoot "build-ci" `
+            -OutputPath "artifacts\reproducibility-a.json"
+          .\scripts\reproducibility.ps1 `
+            -InstallRoot "vcpkg_installed-ci" `
+            -BuildRoot "build-ci" `
+            -OutputPath "artifacts\reproducibility-b.json" `
+            -ReferencePath "artifacts\reproducibility-a.json"
+
+      - name: Upload license and SPDX evidence
+        if: always() && hashFiles('artifacts/supply-chain/**') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: full-build-supply-chain-evidence
+          path: artifacts\supply-chain
+          if-no-files-found: error
+
+      - name: Upload Stage 3 and reproducibility evidence
+        if: >-
+          always() && hashFiles('artifacts/stage3*',
+          'artifacts/stage4*',
+          'artifacts/benchmarks/*owner*',
+          'artifacts/benchmarks/*provider*') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stage3-reproducibility-evidence
+          path: |
+            artifacts\stage3*.json
+            artifacts\stage4*.json
+            artifacts\reproducibility-*.json
+            artifacts\benchmarks\*owner*.jsonl
+            artifacts\benchmarks\*provider*.jsonl
+            artifacts\benchmarks\stage4-fuzz.jsonl
+          if-no-files-found: error

@@ -1,0 +1,17 @@
+{
+  "name": "bsdiff-drake127",
+  "version": "4.3.3",
+  "port-version": 2,
+  "description": "A library for building and applying patches to binary files.",
+  "license": "BSD-2-Clause",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ]
+}

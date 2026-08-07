@@ -1,6 +1,21 @@
 # EVE Client - build artifacts and tools
 build/
+build-vs/
+build-*/
 tools/
+vcpkg_installed/
+vcpkg_installed*/
+/artifacts/
+vcpkg-binary-cache/
+
+# External dependencies (cloned Carbon engine repos)
+external/
+
+# Crash dumps
+crash-*
+
+# Stray object files
+*.obj
 
 # Python
 __pycache__/
@@ -29,3 +44,15 @@ Thumbs.db
 *.lib
 *.exp
 *.log
+
+# Local administration and workstation setup scripts; never release these
+/activate.ps1
+/debloat.ps1
+/deep-bloat.ps1
+/game-exclusions.ps1
+/gamemode.ps1
+/harden-eol.ps1
+/kill-text-input-search.ps1
+/lockdown.ps1
+/maxperf.ps1
+/reinstall-restore.ps1

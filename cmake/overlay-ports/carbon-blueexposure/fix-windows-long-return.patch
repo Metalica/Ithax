@@ -1,0 +1,16 @@
+--- a/include/BlueWrapReturnValuePython.h
++++ b/include/BlueWrapReturnValuePython.h
+@@ -53,6 +53,13 @@ inline BlueScriptValue BlueWrapReturnValueImpl( BlueScriptArguments args, int64_t val )
+ 	return PyLong_FromLongLong( val );
+ }
+ 
++#ifdef _WIN32
++inline BlueScriptValue BlueWrapReturnValueImpl( BlueScriptArguments args, long val )
++{
++	return PyLong_FromLong( val );
++}
++#endif
++
+ #ifdef __APPLE__
+ // Clang on the Mac treats size_t as something different from uint32_t/uint64_t, whereas
+ // other compilers complain about redefinition of this function if we keep it in.
