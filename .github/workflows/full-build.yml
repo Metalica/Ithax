@@ -171,10 +171,7 @@ jobs:
             "carbon-imageio" `
             "carbon-mesh" `
             "nvidia-aftermath" `
-            "nvidia-streamline" `
-            "nvidia-streamline-dlss-sr" `
-            "nvidia-streamline-dlss-fg" `
-            "nvidia-streamline-nis" `
+            "nvidia-streamline[dlss-sr,dlss-fg,nis,reflex]" `
             "amd-fidelityfx-fsr" `
             "vulkan" `
             "vulkan-memory-allocator" `
