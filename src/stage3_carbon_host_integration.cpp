@@ -497,7 +497,14 @@ int main(const int argc, char **argv) {
   try {
     ithax::ThreadBudgetPolicy policy;
     policy.hard_reservations = 1U;
-    policy.soft_reservations = HOST_BLUE_WORKERS + HOST_TRACY_WORKERS;
+    // Soft reservations (Blue + Tracy) are capped so at least one Taskflow
+    // worker and one headroom slot remain on small process CPU sets; the
+    // budget must reject a configuration with no measured headroom.
+    const auto cpu_set_count = ithax::ThreadBudget::QueryProcessCpuSetCount();
+    const auto soft_reservations = std::min(
+        HOST_BLUE_WORKERS + HOST_TRACY_WORKERS,
+        cpu_set_count > 3U ? cpu_set_count - 3U : 0U);
+    policy.soft_reservations = soft_reservations;
     policy.headroom = 1U;
     ithax::ThreadBudget budget(policy);
     const auto baseline = budget.Capture(

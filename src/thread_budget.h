@@ -49,6 +49,8 @@ class ThreadBudget {
 public:
   explicit ThreadBudget(ThreadBudgetPolicy policy);
 
+  static std::uint32_t QueryProcessCpuSetCount();
+
   ThreadBudgetSnapshot Capture(std::string phase, std::string owner,
                                std::string subsystem,
                                std::uint32_t configured_threads,

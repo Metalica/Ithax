@@ -239,6 +239,14 @@ const char *ReservationKindName(const ReservationKind kind) noexcept {
 
 ThreadBudget::ThreadBudget(ThreadBudgetPolicy policy) : m_policy(policy) {}
 
+std::uint32_t ThreadBudget::QueryProcessCpuSetCount() {
+  const PlatformSnapshot platform = CapturePlatformSnapshot();
+  if (platform.process_cpu_set_count == 0U) {
+    throw ThreadBudgetError("platform returned an empty CPU set");
+  }
+  return platform.process_cpu_set_count;
+}
+
 void ThreadBudget::ValidateLabel(const std::string &label) {
   if (label.empty() || label.size() > MAX_LABEL_LENGTH) {
     throw ThreadBudgetError("thread budget label is outside its bound");

@@ -223,13 +223,18 @@ jobs:
           $cmake = (Get-Command cmake.exe).Source
           $toolchain = (Resolve-Path ".\tools\vcpkg\scripts\buildsystems\vcpkg.cmake").Path
           $installRoot = (Resolve-Path "vcpkg_installed-ci").Path
-          & $cmake -S "cmake\trinityal-standalone" -B "build-trinityal" `
-            -G "Visual Studio 17 2022" -A x64 `
-            -DCMAKE_CONFIGURATION_TYPES=Debug `
-            -DCMAKE_TOOLCHAIN_FILE=$toolchain `
-            -DVCPKG_TARGET_TRIPLET=x64-windows-debug `
-            -DVCPKG_INSTALLED_DIR=$installRoot `
-            -DVCPKG_MANIFEST_INSTALL=OFF
+          $configureArgs = @(
+            "-S", "cmake\trinityal-standalone",
+            "-B", "build-trinityal",
+            "-G", "Visual Studio 17 2022",
+            "-A", "x64",
+            "-DCMAKE_CONFIGURATION_TYPES=Debug",
+            "-DCMAKE_TOOLCHAIN_FILE=$toolchain",
+            "-DVCPKG_TARGET_TRIPLET=x64-windows-debug",
+            "-DVCPKG_INSTALLED_DIR=$installRoot",
+            "-DVCPKG_MANIFEST_INSTALL=OFF"
+          )
+          & $cmake @configureArgs
           if ($LASTEXITCODE -ne 0) {
             throw "CMake configure failed with exit code $LASTEXITCODE"
           }
