@@ -162,7 +162,8 @@ jobs:
       - name: Install Vulkan dependencies
         shell: pwsh
         run: |
-          $env:VCPKG_ROOT = ".\tools\vcpkg"
+          $env:VCPKG_ROOT = (Resolve-Path ".\tools\vcpkg").Path
+          $env:PATH_TO_VCPKG_ROOT = $env:VCPKG_ROOT
           $installRoot = (Resolve-Path ".").Path + "\vcpkg_installed-ci"
           New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
           $triplet = "x64-windows-debug"
