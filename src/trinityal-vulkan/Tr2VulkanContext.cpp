@@ -491,6 +491,7 @@ ALResult VulkanContext::CreateDevice( uint32_t adapter, Tr2WindowHandle window, 
 	state.window = window;
 	state.presentParameters = params;
 	state.windowless = ( window == nullptr );
+	state.deviceLostAdapter = adapter;
 
 	if( state.surface == VK_NULL_HANDLE && !state.windowless )
 	{
@@ -983,6 +984,21 @@ ALResult VulkanContext::BeginFrame()
 {
 	VulkanFrameContext& frame = state.frames[state.frameIndex];
 
+	if( state.deviceLost )
+	{
+		CCP_AL_LOGERR( "BeginFrame called after VK_ERROR_DEVICE_LOST" );
+		return E_DEVICELOST;
+	}
+
+	// A surface loss reported by a prior present is deferred here so the
+	// presented image can be observed first; recreate the surface before
+	// any surface-dependent call in this frame.
+	if( !state.surfaceLossReason.empty() && state.swapchain.swapchain != VK_NULL_HANDLE )
+	{
+		CCP_AL_LOG( "Recreating surface deferred from present (%s)", state.surfaceLossReason.c_str() );
+		CR_RETURN_HR( RecreateSurface() );
+	}
+
 	VK_CHECK( vkWaitForFences( state.device, 1, &frame.inFlightFence, VK_TRUE, std::numeric_limits<uint64_t>::max() ) );
 
 	uint64_t completedValue = 0;
@@ -995,7 +1011,22 @@ ALResult VulkanContext::BeginFrame()
 		// loop. The caller retries on the next frame.
 		VkSurfaceCapabilitiesKHR caps = {};
 		VkResult capsResult = vkGetPhysicalDeviceSurfaceCapabilitiesKHR( state.physicalDevice, state.surface, &caps );
-		if( capsResult == VK_SUCCESS && caps.currentExtent.width != 0 && caps.currentExtent.height != 0 )
+		if( capsResult == VK_ERROR_SURFACE_LOST_KHR )
+		{
+			state.surfaceLossReason = "surface caps returned VK_ERROR_SURFACE_LOST_KHR";
+			CCP_AL_LOG( "Surface lost while suspended; recreating surface" );
+			CR_RETURN_HR( RecreateSurface() );
+			if( state.swapchain.suspended )
+			{
+				VK_CHECK( vkResetCommandPool( state.device, frame.commandPool, 0 ) );
+				VkCommandBufferBeginInfo beginInfo = {};
+				beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+				beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+				VK_CHECK( vkBeginCommandBuffer( frame.commandBuffer, &beginInfo ) );
+				return S_OK;
+			}
+		}
+		else if( capsResult == VK_SUCCESS && caps.currentExtent.width != 0 && caps.currentExtent.height != 0 )
 		{
 			CR_RETURN_HR( RecreateSwapchain() );
 			if( state.swapchain.suspended )
@@ -1036,6 +1067,25 @@ ALResult VulkanContext::BeginFrame()
 		}
 		acquireResult = vkAcquireNextImageKHR( state.device, state.swapchain.swapchain,
 			std::numeric_limits<uint64_t>::max(), frame.acquireSemaphore, VK_NULL_HANDLE, &state.swapchain.currentImageIndex );
+	}
+	if( acquireResult == VK_ERROR_SURFACE_LOST_KHR )
+	{
+		state.surfaceLossReason = "acquire returned VK_ERROR_SURFACE_LOST_KHR";
+		CCP_AL_LOG( "Surface lost on acquire; recreating surface" );
+		CR_RETURN_HR( RecreateSurface() );
+		if( state.swapchain.suspended )
+		{
+			return S_OK;
+		}
+		acquireResult = vkAcquireNextImageKHR( state.device, state.swapchain.swapchain,
+			std::numeric_limits<uint64_t>::max(), frame.acquireSemaphore, VK_NULL_HANDLE, &state.swapchain.currentImageIndex );
+	}
+	if( acquireResult == VK_ERROR_DEVICE_LOST )
+	{
+		state.deviceLost = true;
+		CCP_AL_LOGERR( "vkAcquireNextImageKHR returned VK_ERROR_DEVICE_LOST" );
+		GatherDeviceFaultData();
+		return E_DEVICELOST;
 	}
 	if( acquireResult != VK_SUCCESS )
 	{
@@ -1099,6 +1149,13 @@ ALResult VulkanContext::EndFrame()
 	submitInfo.pSignalSemaphoreInfos = signalSemaphores;
 
 	VkResult result = vkQueueSubmit2( state.graphicsQueue, 1, &submitInfo, frame.inFlightFence );
+	if( result == VK_ERROR_DEVICE_LOST )
+	{
+		state.deviceLost = true;
+		CCP_AL_LOGERR( "vkQueueSubmit2 returned VK_ERROR_DEVICE_LOST" );
+		GatherDeviceFaultData();
+		return E_DEVICELOST;
+	}
 	if( result != VK_SUCCESS )
 	{
 		CCP_AL_LOGERR( "vkQueueSubmit2 failed: %d", int( result ) );
@@ -1137,6 +1194,18 @@ ALResult VulkanContext::Present()
 		// can observe it.
 		CCP_AL_LOG( "Present returned %d; swapchain recreation deferred to next acquire", int( result ) );
 	}
+	else if( result == VK_ERROR_SURFACE_LOST_KHR )
+	{
+		state.surfaceLossReason = "present returned VK_ERROR_SURFACE_LOST_KHR";
+		CCP_AL_LOG( "Surface lost on present; recreation deferred to next acquire" );
+	}
+	else if( result == VK_ERROR_DEVICE_LOST )
+	{
+		state.deviceLost = true;
+		CCP_AL_LOGERR( "vkQueuePresentKHR returned VK_ERROR_DEVICE_LOST" );
+		GatherDeviceFaultData();
+		return E_DEVICELOST;
+	}
 	else if( result != VK_SUCCESS )
 	{
 		CCP_AL_LOGERR( "vkQueuePresentKHR failed: %d", int( result ) );
@@ -1147,9 +1216,92 @@ ALResult VulkanContext::Present()
 	return S_OK;
 }
 
+void VulkanContext::GatherDeviceFaultData()
+{
+	if( !state.deviceFaultEnabled || state.device == VK_NULL_HANDLE )
+	{
+		return;
+	}
+
+	auto getFaultDataFn = reinterpret_cast<PFN_vkGetDeviceFaultInfoEXT>(
+		vkGetDeviceProcAddr( state.device, "vkGetDeviceFaultInfoEXT" ) );
+	if( getFaultDataFn == nullptr )
+	{
+		return;
+	}
+
+	VkDeviceFaultCountsEXT faultCounts = {};
+	faultCounts.sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT;
+	VkResult result = getFaultDataFn( state.device, &faultCounts, nullptr );
+	if( result != VK_SUCCESS || ( faultCounts.addressInfoCount == 0 &&
+		faultCounts.vendorInfoCount == 0 && faultCounts.vendorBinarySize == 0 ) )
+	{
+		CCP_AL_LOG( "vkGetDeviceFaultInfoEXT reported no fault records (0x%x)",
+			unsigned( result ) );
+		return;
+	}
+
+	std::vector<VkDeviceFaultAddressInfoKHR> addresses( faultCounts.addressInfoCount );
+	std::vector<VkDeviceFaultVendorInfoKHR> vendors( faultCounts.vendorInfoCount );
+	std::vector<uint8_t> vendorBinary( faultCounts.vendorBinarySize );
+
+	VkDeviceFaultInfoEXT faultInfo = {};
+	faultInfo.sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT;
+	faultInfo.pAddressInfos = addresses.data();
+	faultInfo.pVendorInfos = vendors.data();
+	faultInfo.pVendorBinaryData = vendorBinary.empty() ? nullptr : vendorBinary.data();
+
+	result = getFaultDataFn( state.device, &faultCounts, &faultInfo );
+	if( result != VK_SUCCESS )
+	{
+		CCP_AL_LOGERR( "vkGetDeviceFaultInfoEXT failed: 0x%x", unsigned( result ) );
+		return;
+	}
+
+	CCP_AL_LOG( "Device fault: description='%s' addressCount=%u vendorCount=%u",
+		faultInfo.description,
+		unsigned( faultCounts.addressInfoCount ),
+		unsigned( faultCounts.vendorInfoCount ) );
+	for( uint32_t i = 0; i < faultCounts.addressInfoCount; ++i )
+	{
+		CCP_AL_LOG( "  fault address %u: type=%d reported=%llu precision=%llu",
+			i, int( addresses[i].addressType ),
+			static_cast<unsigned long long>( addresses[i].reportedAddress ),
+			static_cast<unsigned long long>( addresses[i].addressPrecision ) );
+	}
+	for( uint32_t i = 0; i < faultCounts.vendorInfoCount; ++i )
+	{
+		CCP_AL_LOG( "  vendor fault %u: %s, code=%u data=%llu",
+			i,
+			vendors[i].description,
+			unsigned( vendors[i].vendorFaultCode ),
+			static_cast<unsigned long long>( vendors[i].vendorFaultData ) );
+	}
+}
+
 VkCommandBuffer VulkanContext::GetCurrentCommandBuffer() const
 {
 	return state.frames[state.frameIndex].commandBuffer;
+}
+
+void SetVulkanObjectName( VkDevice device, uint64_t objectHandle, VkObjectType objectType, const char* name )
+{
+	if( device == VK_NULL_HANDLE || objectHandle == 0 || name == nullptr )
+	{
+		return;
+	}
+	auto setFn = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(
+		vkGetDeviceProcAddr( device, "vkSetDebugUtilsObjectNameEXT" ) );
+	if( setFn == nullptr )
+	{
+		return;
+	}
+	VkDebugUtilsObjectNameInfoEXT nameInfo = {};
+	nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+	nameInfo.objectType = objectType;
+	nameInfo.objectHandle = objectHandle;
+	nameInfo.pObjectName = name;
+	setFn( device, &nameInfo );
 }
 
 VkDescriptorPool VulkanContext::GetCurrentDescriptorPool() const
@@ -1309,11 +1461,40 @@ ALResult MapVkResult( VkResult result )
 	case VK_ERROR_DEVICE_LOST:
 		return E_DEVICELOST;
 	case VK_ERROR_SURFACE_LOST_KHR:
+		return E_INVALIDCALL;
 	case VK_ERROR_OUT_OF_DATE_KHR:
 		return E_INVALIDCALL;
 	default:
 		return E_FAIL;
 	}
+}
+
+ALResult VulkanContext::RecreateSurface()
+{
+	if( state.windowless || state.window == nullptr )
+	{
+		return E_INVALIDCALL;
+	}
+
+	// The deferred-present reason is consumed here; even if the recreated
+	// swapchain is immediately suspended (window minimized), the surface
+	// itself is fresh and must not be recreated again next frame.
+	state.surfaceLossReason.clear();
+
+	WaitIdle();
+	DestroySwapchain();
+	DestroySurface();
+
+	CR_RETURN_HR( CreateSurface( state.window ) );
+	CR_RETURN_HR( PickPhysicalDevice( state.deviceLostAdapter, true ) );
+	CR_RETURN_HR( RecreateSwapchain() );
+	if( state.swapchain.suspended )
+	{
+		return S_OK;
+	}
+
+	CCP_AL_LOG( "Surface recreated after VK_ERROR_SURFACE_LOST_KHR" );
+	return S_OK;
 }
 
 VkFormat ConvertPixelFormat( Tr2RenderContextEnum::PixelFormat format )

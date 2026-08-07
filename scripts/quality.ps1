@@ -16,8 +16,9 @@ function Read-JsonFile {
 
 function Assert-LicenseMetadata {
     $manifest = Read-JsonFile (Join-Path $repoRoot "vcpkg.json")
-    if ($manifest.license -ne "MIT") {
-        throw "The root manifest must declare MIT."
+    $expectedLicense = "MIT AND LicenseRef-PolyForm-Noncommercial-1.0.0"
+    if ($manifest.license -ne $expectedLicense) {
+        throw "The root manifest must declare the dual license: $expectedLicense."
     }
 
     $portLicenses = @{
@@ -45,6 +46,11 @@ function Assert-LicenseMetadata {
     $licenseText = Get-Content -LiteralPath $licensePath -Raw
     if ($licenseText -notmatch "(?m)^MIT License\s*$") {
         throw "The root LICENSE must contain the MIT License heading."
+    }
+    $polyformPath = Join-Path $repoRoot "LICENSE-POLYFORM"
+    $polyformText = Get-Content -LiteralPath $polyformPath -Raw
+    if ($polyformText -notmatch "PolyForm Noncommercial License 1\.0\.0") {
+        throw "LICENSE-POLYFORM must contain the PolyForm Noncommercial License heading."
     }
 }
 

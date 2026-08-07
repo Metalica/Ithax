@@ -130,7 +130,8 @@ void Tr2FenceAL::Describe( Tr2DeviceResourceDescriptionAL& description ) const
 
 ALResult Tr2FenceAL::SetName( const char* name )
 {
-	(void)name;
+	SetVulkanObjectName( m_device, reinterpret_cast<uint64_t>( m_semaphore ),
+		VK_OBJECT_TYPE_SEMAPHORE, name );
 	return S_OK;
 }
 

@@ -219,7 +219,8 @@ void Tr2ResourceSetAL::Describe( Tr2DeviceResourceDescriptionAL& description ) c
 
 ALResult Tr2ResourceSetAL::SetName( const char* name )
 {
-	(void)name;
+	SetVulkanObjectName( m_device, reinterpret_cast<uint64_t>( m_descriptorSet ),
+		VK_OBJECT_TYPE_DESCRIPTOR_SET, name );
 	return S_OK;
 }
 

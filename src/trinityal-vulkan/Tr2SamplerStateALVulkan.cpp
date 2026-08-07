@@ -80,7 +80,8 @@ void Tr2SamplerStateAL::Describe( Tr2DeviceResourceDescriptionAL& description ) 
 
 ALResult Tr2SamplerStateAL::SetName( const char* name )
 {
-	(void)name;
+	SetVulkanObjectName( m_device, reinterpret_cast<uint64_t>( m_sampler ),
+		VK_OBJECT_TYPE_SAMPLER, name );
 	return S_OK;
 }
 

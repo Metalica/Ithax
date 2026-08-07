@@ -126,7 +126,8 @@ void Tr2OcclusionQueryAL::Describe( Tr2DeviceResourceDescriptionAL& description 
 
 ALResult Tr2OcclusionQueryAL::SetName( const char* name )
 {
-	(void)name;
+	SetVulkanObjectName( m_device, reinterpret_cast<uint64_t>( m_queryPool ),
+		VK_OBJECT_TYPE_QUERY_POOL, name );
 	return S_OK;
 }
 

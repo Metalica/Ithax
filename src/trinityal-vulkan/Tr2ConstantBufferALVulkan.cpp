@@ -133,7 +133,8 @@ void Tr2ConstantBufferAL::Describe( Tr2DeviceResourceDescriptionAL& description 
 
 ALResult Tr2ConstantBufferAL::SetName( const char* name )
 {
-	(void)name;
+	SetVulkanObjectName( m_device, reinterpret_cast<uint64_t>( m_buffer ),
+		VK_OBJECT_TYPE_BUFFER, name );
 	return S_OK;
 }
 

@@ -163,7 +163,7 @@ jobs:
         shell: pwsh
         run: |
           $env:VCPKG_ROOT = ".\tools\vcpkg"
-          $installRoot = (Resolve-Path "vcpkg_installed-ci").Path
+          $installRoot = (Resolve-Path ".").Path + "\vcpkg_installed-ci"
           New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
           $triplet = "x64-windows-debug"
           & ".\tools\vcpkg\vcpkg.exe" install `

@@ -17,6 +17,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
+#include <chrono>
 #include <vector>
 
 // Needed by CcpCore.
@@ -28,6 +30,18 @@ namespace
 constexpr uint32_t WINDOW_WIDTH = 800;
 constexpr uint32_t WINDOW_HEIGHT = 600;
 constexpr uint32_t FRAME_COUNT = 60;
+
+double Percentile( std::vector<double>& samples, double percentile )
+{
+	if( samples.empty() )
+	{
+		return 0.0;
+	}
+	std::sort( samples.begin(), samples.end() );
+	const size_t index = static_cast<size_t>(
+		std::ceil( percentile * samples.size() ) - 1 );
+	return samples[std::min( index, samples.size() - 1 )];
+}
 
 void RequireGraph( const ALResult& result, const char* message )
 {
@@ -611,6 +625,10 @@ int RunScene( HWND window, Tr2PrimaryRenderContextAL& renderContext )
 	// Depth texture wrapper for the swapchain depth image. Re-fetched each
 	// frame: the wrapper is re-attached when the swapchain is recreated.
 	bool textureShaderReady = false;
+	std::vector<double> presentedFrameTimesMilliseconds;
+	presentedFrameTimesMilliseconds.reserve( FRAME_COUNT );
+
+	auto frameStart = std::chrono::steady_clock::now();
 	for( uint32_t frame = 0; frame < FRAME_COUNT; ++frame )
 	{
 		renderContext.BeginScene();
@@ -1077,7 +1095,60 @@ int RunScene( HWND window, Tr2PrimaryRenderContextAL& renderContext )
 				DispatchMessageA( &message );
 			}
 		}
+		if( frame == 50 )
+		{
+			ShowWindow( window, SW_RESTORE );
+			MSG message = {};
+			while( PeekMessageA( &message, nullptr, 0, 0, PM_REMOVE ) )
+			{
+				TranslateMessage( &message );
+				DispatchMessageA( &message );
+			}
+		}
+
+		const auto frameEnd = std::chrono::steady_clock::now();
+		const double frameTime = std::chrono::duration<double, std::milli>(
+			frameEnd - frameStart ).count();
+		if( !suspended )
+		{
+			presentedFrameTimesMilliseconds.push_back( frameTime );
+		}
+		frameStart = frameEnd;
 	}
+
+	// Surface-loss recovery is exercised on the last frame: destroy the
+	// swapchain and surface through the deferred path used on present.
+	{
+		ALResult recoverResult = renderContext.GetVulkanContext().RecreateSurface();
+		if( FAILED( recoverResult ) )
+		{
+			std::fprintf( stderr, "Surface recovery failed: 0x%08x\n",
+				unsigned( recoverResult.GetResult() ) );
+			return 1;
+		}
+		std::printf( "Surface recovery verified: swapchain and surface recreated\n" );
+	}
+
+	// Performance evidence (5.9 gate): named hardware, driver, resolution,
+	// present mode, and p50/p95/p99 frame times. driverVersion is not
+	// guaranteed to be MAJOR/MINOR/PATCH encoded (NVIDIA packs it), so the
+	// raw 32-bit value is reported.
+	const VkPhysicalDeviceProperties& deviceProperties =
+		renderContext.GetVulkanContext().state.properties;
+	std::printf( "Stage 5 perf: hardware=\"%s\" driverVersion=0x%08x "
+		"resolution=%ux%u presentMode=%d apiVersion=%u.%u.%u frames=%zu\n",
+		deviceProperties.deviceName,
+		deviceProperties.driverVersion,
+		WINDOW_WIDTH, WINDOW_HEIGHT,
+		int( renderContext.GetVulkanContext().state.presentMode ),
+		VK_API_VERSION_MAJOR( deviceProperties.apiVersion ),
+		VK_API_VERSION_MINOR( deviceProperties.apiVersion ),
+		VK_API_VERSION_PATCH( deviceProperties.apiVersion ),
+		presentedFrameTimesMilliseconds.size() );
+	std::printf( "Stage 5 perf: frameTimeMs p50=%.3f p95=%.3f p99=%.3f\n",
+		Percentile( presentedFrameTimesMilliseconds, 0.50 ),
+		Percentile( presentedFrameTimesMilliseconds, 0.95 ),
+		Percentile( presentedFrameTimesMilliseconds, 0.99 ) );
 
 	return 0;
 }

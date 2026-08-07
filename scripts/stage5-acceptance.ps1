@@ -66,8 +66,12 @@ function Invoke-SceneRun {
     $validationErrors = @($output | Where-Object { $_ -match "Vulkan\[ERROR\]" })
     $readbackVerified = @($output | Where-Object { $_ -match "Readback verified" }).Count -gt 0
     $framesOk = @($output | Where-Object { $_ -match "frames presented successfully" }).Count -gt 0
+    $surfaceRecovery = @($output | Where-Object { $_ -match "Surface recovery verified" }).Count -gt 0
+    $perfEvidence = @($output | Where-Object { $_ -match "Stage 5 perf: frameTimeMs p50=" }).Count -gt 0
+    $restoreExercised = @($output | Where-Object { $_ -match "minimized, skipped graph recording" }).Count -gt 0
 
     if ($exitCode -eq 0 -and $readbackVerified -and $framesOk -and
+        $surfaceRecovery -and $perfEvidence -and $restoreExercised -and
         $validationErrors.Count -eq 0) {
         $laneStatus[$Name] = "pass"
         $measuredLanes.Add($Name)
@@ -159,8 +163,10 @@ $record = [ordered]@{
     open_gates = $openGates.ToArray()
     validation_layers = if ($validationAvailable) { "installed" } else { "missing" }
     readback = "clear_color_and_triangle_verified"
-    resize_minimize = "frame_20_resize_frame_40_minimize"
+    resize_minimize = "frame_20_resize_frame_40_minimize_frame_50_restore"
     render_graph = "pass_order_culling_lifetimes_layouts_sync2_barriers"
+    recovery = "surface_lost_typed_handling_and_recreation"
+    performance = "named_hardware_driver_resolution_present_mode_p50_p95_p99"
 }
 $record | ConvertTo-Json -Depth 6 |
     Set-Content -LiteralPath $outputFile -Encoding UTF8

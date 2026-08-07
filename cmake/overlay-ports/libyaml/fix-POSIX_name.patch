@@ -2,6 +2,16 @@ diff --git a/src/api.c b/src/api.c
 index e793b08..6f16fc5 100644
 --- a/src/api.c
 +++ b/src/api.c
-@@ -66 +66 @@
+@@ -61,8 +61,8 @@ YAML_DECLARE(yaml_char_t *)
+ yaml_strdup(const yaml_char_t *str)
+ {
+     if (!str)
+         return NULL;
+ 
 -    return (yaml_char_t *)strdup((char *)str);
 +    return (yaml_char_t *)_strdup((char *)str);
+ }
+ 
+ /*
+  * Extend a string.
+  */

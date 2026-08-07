@@ -118,7 +118,8 @@ void Tr2VertexLayoutAL::Describe( Tr2DeviceResourceDescriptionAL& description ) 
 
 ALResult Tr2VertexLayoutAL::SetName( const char* name )
 {
-	(void)name;
+	SetVulkanObjectName( m_device, reinterpret_cast<uint64_t>( m_cachedPipeline ),
+		VK_OBJECT_TYPE_PIPELINE, name );
 	return S_OK;
 }
 

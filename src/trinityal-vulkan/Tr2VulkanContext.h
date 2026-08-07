@@ -96,6 +96,8 @@ struct VulkanDeviceState
 	Tr2PresentParametersAL presentParameters = {};
 	bool windowless = false;
 	bool deviceLost = false;
+	uint32_t deviceLostAdapter = 0;
+	std::string surfaceLossReason;
 };
 
 struct VulkanDeferredDestroy
@@ -131,6 +133,7 @@ public:
 	ALResult CreateDevice( uint32_t adapter, Tr2WindowHandle window, const Tr2PresentParametersAL& params );
 	ALResult CreateSwapchain();
 	ALResult RecreateSwapchain();
+	ALResult RecreateSurface();
 	void DestroySwapchain();
 	void Destroy();
 	void DestroyDevice();
@@ -139,6 +142,7 @@ public:
 	ALResult BeginFrame();
 	ALResult EndFrame();
 	ALResult Present();
+	void GatherDeviceFaultData();
 
 	VkCommandBuffer GetCurrentCommandBuffer() const;
 	VkDescriptorPool GetCurrentDescriptorPool() const;
@@ -182,8 +186,8 @@ private:
 };
 
 ALResult MapVkResult( VkResult result );
-VkFormat ConvertPixelFormat( Tr2RenderContextEnum::PixelFormat format );
-Tr2RenderContextEnum::PixelFormat ConvertVkFormat( VkFormat format );
+void SetVulkanObjectName( VkDevice device, uint64_t objectHandle, VkObjectType objectType, const char* name );
+VkFormat ConvertPixelFormat( Tr2RenderContextEnum::PixelFormat format );Tr2RenderContextEnum::PixelFormat ConvertVkFormat( VkFormat format );
 VkFormat ConvertDepthStencilFormat( Tr2RenderContextEnum::DepthStencilFormat format );
 VkPrimitiveTopology ConvertTopology( Tr2RenderContextEnum::Topology topology );
 VkCompareOp ConvertCompareFunc( Tr2RenderContextEnum::CompareFunc func );

@@ -103,7 +103,8 @@ void Tr2ShaderAL::Describe( Tr2DeviceResourceDescriptionAL& description ) const
 
 ALResult Tr2ShaderAL::SetName( const char* name )
 {
-	(void)name;
+	SetVulkanObjectName( m_device, reinterpret_cast<uint64_t>( m_module ),
+		VK_OBJECT_TYPE_SHADER_MODULE, name );
 	return S_OK;
 }
 

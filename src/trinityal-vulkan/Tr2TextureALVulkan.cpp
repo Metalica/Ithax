@@ -654,6 +654,8 @@ void Tr2TextureAL::Describe( Tr2DeviceResourceDescriptionAL& description ) const
 ALResult Tr2TextureAL::SetName( const char* name )
 {
 	m_name = name ? name : "";
+	SetVulkanObjectName( m_device, reinterpret_cast<uint64_t>( m_image ),
+		VK_OBJECT_TYPE_IMAGE, name );
 	return S_OK;
 }
 
