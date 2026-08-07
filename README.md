@@ -1,11 +1,14 @@
 # Ithax
 
 Ithax is a multicore client foundation built around the open Carbon engine
-modules. The repository is implementing the bounded native Stage 3 foundation
-while measuring external Carbon and platform owners explicitly.
+modules. The repository implements the bounded native Stage 3 foundation,
+the Stage 4 network conformance path, and the Stage 5 TrinityAL Vulkan
+backend while measuring external Carbon and platform owners explicitly.
 Server-side implementations, proprietary content, and external runtime
-dependencies are outside this
-repository's distribution scope.
+dependencies are outside this repository's distribution scope.
+
+See [`ABOUT.md`](ABOUT.md) for an overview of the project, its milestones,
+and its scope boundaries.
 
 ## Current Status
 
@@ -23,6 +26,23 @@ repository's distribution scope.
   slice now passes the p99 16.667 ms budget with one measured Taskflow worker;
   Carbon's pacing wait remains outside that timing scope and hard sample misses
   remain recorded as diagnostics.
+- Stage 4 network conformance passes: the machoNet framing, EVE marshal
+  codec, six-step PLACEBO session handshake, session crypto, connection
+  generations, and reconnect/stale-completion behavior are verified against
+  golden vectors and a deterministic mock; the coverage-guided fuzz lane
+  completes without crash or unbounded work.
+- Stage 5 TrinityAL Vulkan backend is active: a real Vulkan 1.3 device path
+  with VMA allocation, synchronization2 dynamic rendering, timeline
+  semaphores, a compiled render graph, and an offline HLSL-to-SPIR-V
+  toolchain validated with `spirv-val`.
+- The Stage 5 milestone scene clears, draws a triangle and a Carbon Mesh
+  procedural ship, orbits the camera, survives resize and minimize/restore,
+  verifies a deterministic readback, recreates a lost surface, and records
+  named-hardware p50/p95/p99 frame-time evidence with zero validation
+  errors.
+- Stage 5 device-loss handling is typed: `VK_ERROR_DEVICE_LOST` stops
+  submission, surfaces `E_DEVICELOST`, and gathers `VK_EXT_device_fault`
+  diagnostics when available.
 - Stage 1.3: Carbon Core, Carbon Math, Carbon Scheduler, Carbon IO, Carbon
   Blue, Carbon Mesh, Carbon ImageIO, Carbon Resources, Carbon Trinity,
   Carbon Destiny, the Carbon Audio stub, Carbon Exefile, Carbon Pathfinder,
@@ -87,10 +107,14 @@ dependency and verification commands.
 
 ## Layout
 
-- `src/` contains Ithax-owned native code.
-- `cmake/` contains vcpkg overlays, triplets, and toolchains.
+- `src/` contains Ithax-owned native code, including the TrinityAL Vulkan
+  backend under `src/trinityal-vulkan/`.
+- `cmake/` contains vcpkg overlays, triplets, and toolchains, plus the
+  standalone TrinityAL Vulkan build under `cmake/trinityal-standalone/`.
 - `scripts/` contains reproducible dependency, build, and test automation.
-- `external/carbon/` contains local Carbon engine sources.
+- `external/carbon/` contains local Carbon engine sources; the pinned
+  TrinityAL checkout used by the Stage 5 standalone build is fetched into
+  `external/trinity/` by the CI pipeline.
 - `docs/` contains architecture and gap-analysis documents.
 
 ## License
