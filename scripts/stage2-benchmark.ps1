@@ -4,12 +4,12 @@ param(
     [string]$OutputPath = "artifacts\benchmarks\stage2.jsonl",
     [ValidateRange(1, 1000000)]
     [int]$TaskCount = 10000,
-    [int[]]$TaskCounts = @(),
+    [string[]]$TaskCounts = @(),
     [ValidateRange(1, 1000000)]
     [int]$EntityCount = 10000,
     [ValidateRange(1, 100)]
     [int]$Repetitions = 5,
-    [int[]]$Workers = @(1, 2, 4, 8, 16)
+    [string[]]$Workers = @("1", "2", "4", "8", "16")
 )
 
 Set-StrictMode -Version Latest
@@ -29,7 +29,9 @@ if (-not (Test-Path -LiteralPath $outputDirectory -PathType Container)) {
     New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
 }
 
-$workerValues = @($Workers | Sort-Object -Unique)
+$workerValues = @($Workers | ForEach-Object {
+    [int[]]($_ -split ",")
+} | Sort-Object -Unique)
 if ($workerValues.Count -eq 0) {
     throw "At least one worker count is required."
 }
@@ -39,7 +41,9 @@ foreach ($worker in $workerValues) {
     }
 }
 
-$taskValues = @($TaskCounts | Sort-Object -Unique)
+$taskValues = @($TaskCounts | ForEach-Object {
+    [int[]]($_ -split ",")
+} | Sort-Object -Unique)
 if ($taskValues.Count -eq 0) {
     $taskValues = @($TaskCount)
 }

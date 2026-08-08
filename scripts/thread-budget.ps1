@@ -4,7 +4,7 @@ param(
     [string]$OutputPath = "artifacts\benchmarks\thread-budget.jsonl",
     [ValidateRange(1, 10)]
     [int]$Repetitions = 3,
-    [int[]]$Workers = @(1, 2, 4),
+    [string[]]$Workers = @("1", "2", "4"),
     [ValidateRange(0, 64)]
     [int]$HardReserved = 1,
     [ValidateRange(0, 64)]
@@ -34,7 +34,9 @@ if (-not (Test-Path -LiteralPath $outputDirectory -PathType Container)) {
     New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
 }
 
-$workerValues = @($Workers | Sort-Object -Unique)
+$workerValues = @($Workers | ForEach-Object {
+    [int[]]($_ -split ",")
+} | Sort-Object -Unique)
 if ($workerValues.Count -eq 0) {
     throw "At least one worker count is required."
 }

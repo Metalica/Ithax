@@ -16,14 +16,88 @@ $outputFile = if ([IO.Path]::IsPathRooted($OutputPath)) {
     [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputPath))
 }
 $outputDirectory = Split-Path -Parent $outputFile
-$clangCl = Join-Path $repoRoot "tools\llvm\bin\clang-cl.exe"
-$fuzzerLib = Join-Path $repoRoot `
-    "tools\llvm\lib\clang\18\lib\windows\clang_rt.fuzzer-x86_64.lib"
-$vcvars = "C:\Program Files (x86)\Microsoft Visual Studio\2022\" +
-    "BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+
+function Resolve-ClangCl {
+    $pathCommand = Get-Command clang-cl.exe -ErrorAction SilentlyContinue
+    $candidates = @(
+        (Join-Path $repoRoot "tools\llvm\bin\clang-cl.exe"),
+        $(if ($null -ne $pathCommand) { $pathCommand.Source })
+    )
+    foreach ($candidate in $candidates) {
+        if (-not [string]::IsNullOrWhiteSpace($candidate) -and
+            (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            return $candidate
+        }
+    }
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} `
+        "Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path -LiteralPath $vswhere -PathType Leaf) {
+        $installRoots = @(
+            & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Llvm.Clang `
+                -property installationPath 2>$null
+        )
+        foreach ($root in $installRoots) {
+            if ([string]::IsNullOrWhiteSpace($root)) {
+                continue
+            }
+            $candidate = Join-Path $root "VC\Tools\Llvm\x64\bin\clang-cl.exe"
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                return $candidate
+            }
+        }
+    }
+    return $null
+}
+
+function Resolve-FuzzerLib {
+    param([Parameter(Mandatory)][string]$ClangCl)
+
+    $llvmRoot = Split-Path -Parent (Split-Path -Parent $ClangCl)
+    $candidates = @(
+        (Join-Path $llvmRoot "lib\clang\18\lib\windows\clang_rt.fuzzer-x86_64.lib"),
+        (Join-Path $llvmRoot "lib\clang\19\lib\windows\clang_rt.fuzzer-x86_64.lib"),
+        (Join-Path $llvmRoot "lib\clang\20\lib\windows\clang_rt.fuzzer-x86_64.lib")
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
+function Resolve-VcVars {
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} `
+        "Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path -LiteralPath $vswhere -PathType Leaf) {
+        $installRoots = @(
+            & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+                -property installationPath 2>$null
+        )
+        foreach ($root in $installRoots) {
+            if ([string]::IsNullOrWhiteSpace($root)) {
+                continue
+            }
+            $candidate = Join-Path $root "VC\Auxiliary\Build\vcvars64.bat"
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                return $candidate
+            }
+        }
+    }
+    return $null
+}
+
+$clangCl = Resolve-ClangCl
+$fuzzerLib = if ($null -ne $clangCl) {
+    Resolve-FuzzerLib $clangCl
+} else {
+    $null
+}
+$vcvars = Resolve-VcVars
 
 foreach ($requiredPath in @($clangCl, $fuzzerLib, $vcvars)) {
-    if (-not (Test-Path -LiteralPath $requiredPath)) {
+    if ([string]::IsNullOrWhiteSpace($requiredPath) -or
+        -not (Test-Path -LiteralPath $requiredPath)) {
         throw "Stage 4 fuzz input was not found: $requiredPath"
     }
 }

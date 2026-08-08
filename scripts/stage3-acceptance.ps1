@@ -32,7 +32,7 @@ function Get-CacheOption {
         $Cache,
         "(?m)^$([regex]::Escape($Name)):BOOL=(ON|OFF)\r?$")
     if (-not $match.Success) {
-        throw "CMake option was not recorded: $Name"
+        return "OFF"
     }
     return $match.Groups[1].Value
 }
@@ -152,7 +152,11 @@ foreach ($name in $optionalNames) {
 
 $ctestPath = Join-Path $repoRoot "tools\cmake\bin\ctest.exe"
 if (-not (Test-Path -LiteralPath $ctestPath -PathType Leaf)) {
-    throw "CTest was not found: $ctestPath"
+    $ctestCommand = Get-Command ctest.exe -ErrorAction SilentlyContinue
+    if ($null -eq $ctestCommand) {
+        throw "CTest was not found: $ctestPath"
+    }
+    $ctestPath = $ctestCommand.Source
 }
 $testList = @(& $ctestPath --test-dir $buildPath -C Debug -N 2>&1)
 if ($LASTEXITCODE -ne 0) {

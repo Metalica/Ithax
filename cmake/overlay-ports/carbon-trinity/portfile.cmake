@@ -33,8 +33,15 @@ set(TRINITY_PATCH_FILE "${CMAKE_CURRENT_LIST_DIR}/../../patches/trinityal-vulkan
 set(TRINITY_PATCH_MARKER "${SOURCE_PATH}/trinityal/include/TrinityALForward.h")
 file(READ "${TRINITY_PATCH_MARKER}" TRINITY_PATCH_CONTENT)
 if(NOT TRINITY_PATCH_CONTENT MATCHES "TRINITY_VULKAN")
+    # A Windows checkout converts the LF patch to CRLF, which git apply
+    # rejects against the LF git-cloned sources. Normalize to LF first.
+    file(READ "${TRINITY_PATCH_FILE}" TRINITY_PATCH_TEXT)
+    string(REPLACE "\r\n" "\n" TRINITY_PATCH_TEXT "${TRINITY_PATCH_TEXT}")
+    set(TRINITY_PATCH_NORMALIZED
+        "${CURRENT_BUILDTREES_DIR}/trinityal-vulkan.patch")
+    file(WRITE "${TRINITY_PATCH_NORMALIZED}" "${TRINITY_PATCH_TEXT}")
     vcpkg_execute_required_process(
-        COMMAND git apply --whitespace=nowarn "${TRINITY_PATCH_FILE}"
+        COMMAND git apply --whitespace=nowarn "${TRINITY_PATCH_NORMALIZED}"
         WORKING_DIRECTORY "${SOURCE_PATH}"
         LOGNAME trinityal-vulkan-patch
     )

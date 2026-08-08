@@ -25,6 +25,13 @@ $buildPath = Convert-ToAbsolutePath $BuildRoot
 $outputFile = Convert-ToAbsolutePath $OutputPath
 $outputDirectory = Split-Path -Parent $outputFile
 $ctestPath = Join-Path $repoRoot "tools\cmake\bin\ctest.exe"
+if (-not (Test-Path -LiteralPath $ctestPath -PathType Leaf)) {
+    $ctestCommand = Get-Command ctest.exe -ErrorAction SilentlyContinue
+    if ($null -eq $ctestCommand) {
+        throw "CTest was not found: $ctestPath"
+    }
+    $ctestPath = $ctestCommand.Source
+}
 
 foreach ($requiredPath in @($ctestPath, $buildPath)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
