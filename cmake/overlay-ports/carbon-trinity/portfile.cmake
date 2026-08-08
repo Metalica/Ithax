@@ -1,10 +1,12 @@
 set(TRINITY_PATCH_FILE "${CMAKE_CURRENT_LIST_DIR}/../../patches/trinityal-vulkan.patch")
-find_program(TRINITY_GIT_EXECUTABLE NAMES git git.cmd REQUIRED)
+vcpkg_find_acquire_program(GIT)
 
 vcpkg_from_git(
   OUT_SOURCE_PATH SOURCE_PATH
   URL https://github.com/carbonengine/trinity.git
   REF 4675ceaaa445f7fd44a1dc97472c8efa4ad8599c
+  PATCHES
+    "${TRINITY_PATCH_FILE}"
 )
 
 # Setup the features
@@ -24,23 +26,6 @@ vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
 set(ITHAX_VULKAN_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../../src/trinityal-vulkan")
 if(EXISTS "${ITHAX_VULKAN_SOURCE_DIR}")
     file(COPY "${ITHAX_VULKAN_SOURCE_DIR}/" DESTINATION "${SOURCE_PATH}/trinityal/vulkan")
-endif()
-
-# Apply the patch after extraction. The source archive is intentionally not a
-# Git work tree, so use the resolved Git executable and apply from its root.
-set(TRINITY_PATCH_MARKER "${SOURCE_PATH}/trinityal/include/TrinityALForward.h")
-file(READ "${TRINITY_PATCH_MARKER}" TRINITY_PATCH_CONTENT)
-if(NOT TRINITY_PATCH_CONTENT MATCHES "TRINITY_VULKAN")
-    vcpkg_execute_required_process(
-        COMMAND "${TRINITY_GIT_EXECUTABLE}"
-            -c core.autocrlf=false
-            apply
-            --ignore-whitespace
-            --whitespace=nowarn
-            "${TRINITY_PATCH_FILE}"
-        WORKING_DIRECTORY "${SOURCE_PATH}"
-        LOGNAME trinityal-vulkan-patch
-    )
 endif()
 
 # Add the Vulkan sources to the shared TrinityAL source list.

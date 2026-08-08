@@ -246,11 +246,14 @@ jobs:
       - name: Stage 5 TrinityAL Vulkan acceptance
         shell: pwsh
         run: |
+          # Hosted runners have no guaranteed Vulkan device. Only the explicit
+          # unavailable-device result is exempt; all scene regressions still fail.
           .\scripts\stage5-acceptance.ps1 `
             -InstallRoot "vcpkg_installed-ci" `
             -BuildRoot "build-trinityal" `
             -OutputPath "artifacts\stage5-acceptance.json" `
-            -FailOnOpenGates
+            -FailOnOpenGates `
+            -AllowNoVulkanDevice
 
       - name: Upload Stage 5 evidence
         if: always() && hashFiles('artifacts/stage5*') != ''

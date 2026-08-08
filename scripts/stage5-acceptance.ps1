@@ -4,7 +4,8 @@ param(
     [string]$BuildRoot = "build-trinityal",
     [string]$OutputPath = "artifacts\stage5-acceptance.json",
     [string]$SceneExe = "Debug\ithax-stage5-milestone-scene.exe",
-    [switch]$FailOnOpenGates
+    [switch]$FailOnOpenGates,
+    [switch]$AllowNoVulkanDevice
 )
 
 Set-StrictMode -Version Latest
@@ -57,18 +58,63 @@ if ($validationAvailable) {
 $laneStatus = [ordered]@{}
 $openGates = [System.Collections.Generic.List[string]]::new()
 $measuredLanes = [System.Collections.Generic.List[string]]::new()
+$unavailableLanes = [System.Collections.Generic.List[string]]::new()
+$hardwareUnavailableExitCode = 77
+
+function Invoke-SceneProcess {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $Path
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    if (-not $process.Start()) {
+        throw "Stage 5 scene did not start: $Path"
+    }
+
+    try {
+        $standardOutput = $process.StandardOutput.ReadToEndAsync()
+        $standardError = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        [System.Threading.Tasks.Task]::WaitAll(
+            [System.Threading.Tasks.Task[]]@($standardOutput, $standardError)
+        )
+
+        return [pscustomobject]@{
+            Output = @($standardOutput.Result, $standardError.Result)
+            ExitCode = $process.ExitCode
+        }
+    } finally {
+        $process.Dispose()
+    }
+}
 
 function Invoke-SceneRun {
     param([Parameter(Mandatory)][string]$Name)
 
-    $output = @(& $scenePath 2>&1)
-    $exitCode = $LASTEXITCODE
+    $sceneRun = Invoke-SceneProcess $scenePath
+    $output = $sceneRun.Output
+    $exitCode = $sceneRun.ExitCode
+    $hardwareUnavailable = $exitCode -eq $hardwareUnavailableExitCode -and
+        @($output | Where-Object {
+                $_ -match "Stage 5 hardware unavailable: no usable Vulkan device"
+            }).Count -gt 0
     $validationErrors = @($output | Where-Object { $_ -match "Vulkan\[ERROR\]" })
     $readbackVerified = @($output | Where-Object { $_ -match "Readback verified" }).Count -gt 0
     $framesOk = @($output | Where-Object { $_ -match "frames presented successfully" }).Count -gt 0
     $surfaceRecovery = @($output | Where-Object { $_ -match "Surface recovery verified" }).Count -gt 0
     $perfEvidence = @($output | Where-Object { $_ -match "Stage 5 perf: frameTimeMs p50=" }).Count -gt 0
     $restoreExercised = @($output | Where-Object { $_ -match "minimized, skipped graph recording" }).Count -gt 0
+
+    if ($AllowNoVulkanDevice -and $hardwareUnavailable) {
+        $laneStatus[$Name] = "not_available"
+        $unavailableLanes.Add($Name)
+        return
+    }
 
     if ($exitCode -eq 0 -and $readbackVerified -and $framesOk -and
         $surfaceRecovery -and $perfEvidence -and $restoreExercised -and
@@ -160,6 +206,7 @@ $record = [ordered]@{
     backend = "TrinityAL Vulkan (TRINITY_PLATFORM=TRINITY_VULKAN)"
     lanes = $laneStatus
     measured_lanes = $measuredLanes.ToArray()
+    unavailable_lanes = $unavailableLanes.ToArray()
     open_gates = $openGates.ToArray()
     validation_layers = if ($validationAvailable) { "installed" } else { "missing" }
     readback = "clear_color_and_triangle_verified"

@@ -29,17 +29,25 @@ if(NOT TRINITY_PATCH_CONTENT MATCHES "TRINITY_VULKAN")
         COMMAND "${TRINITY_GIT_EXECUTABLE}"
             -c core.autocrlf=false
             apply
+            --directory=external/trinity
             --ignore-whitespace
             --whitespace=nowarn
             "${TRINITY_PATCH_FILE}"
-        WORKING_DIRECTORY "${REPO_ROOT}/external/trinity"
+        WORKING_DIRECTORY "${REPO_ROOT}"
         RESULT_VARIABLE TRINITY_PATCH_RESULT
-        OUTPUT_QUIET ERROR_QUIET
+        OUTPUT_VARIABLE TRINITY_PATCH_OUTPUT
+        ERROR_VARIABLE TRINITY_PATCH_ERROR
     )
     if(NOT TRINITY_PATCH_RESULT EQUAL 0)
         message(FATAL_ERROR
             "Failed to apply the TrinityAL Vulkan patch set: "
-            "${TRINITY_PATCH_RESULT}")
+            "${TRINITY_PATCH_RESULT}\n${TRINITY_PATCH_ERROR}")
+    endif()
+    file(READ "${TRINITY_PATCH_MARKER}" TRINITY_PATCH_CONTENT)
+    if(NOT TRINITY_PATCH_CONTENT MATCHES "TRINITY_VULKAN")
+        message(FATAL_ERROR
+            "TrinityAL Vulkan patch completed without updating "
+            "TrinityALForward.h")
     endif()
 endif()
 

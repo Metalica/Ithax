@@ -30,6 +30,7 @@ namespace
 constexpr uint32_t WINDOW_WIDTH = 800;
 constexpr uint32_t WINDOW_HEIGHT = 600;
 constexpr uint32_t FRAME_COUNT = 60;
+constexpr int HARDWARE_UNAVAILABLE_EXIT_CODE = 77;
 
 double Percentile( std::vector<double>& samples, double percentile )
 {
@@ -408,6 +409,15 @@ int RunScene( HWND window, Tr2PrimaryRenderContextAL& renderContext )
 	ALResult result = renderContext.CreateDevice( 0, window, presentParameters );
 	if( FAILED( result ) )
 	{
+		const bool noPhysicalDevice =
+			renderContext.GetVulkanContext().state.physicalDevice ==
+			VK_NULL_HANDLE;
+		if( noPhysicalDevice )
+		{
+			std::fprintf( stderr,
+				"Stage 5 hardware unavailable: no usable Vulkan device\n" );
+			return HARDWARE_UNAVAILABLE_EXIT_CODE;
+		}
 		std::fprintf( stderr, "CreateDevice failed: 0x%08x\n", unsigned( result.GetResult() ) );
 		return 1;
 	}
