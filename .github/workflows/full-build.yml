@@ -265,11 +265,11 @@ jobs:
         run: |
           .\scripts\reproducibility.ps1 `
             -InstallRoot "vcpkg_installed-ci" `
-            -BuildRoot "build-ci" `
+            -BuildRoot "build-trinityal" `
             -OutputPath "artifacts\reproducibility-a.json"
           .\scripts\reproducibility.ps1 `
             -InstallRoot "vcpkg_installed-ci" `
-            -BuildRoot "build-ci" `
+            -BuildRoot "build-trinityal" `
             -OutputPath "artifacts\reproducibility-b.json" `
             -ReferencePath "artifacts\reproducibility-a.json"
 

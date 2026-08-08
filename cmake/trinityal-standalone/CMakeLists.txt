@@ -14,6 +14,31 @@ if(NOT EXISTS "${AL_ROOT}/vulkan")
     file(COPY "${ITHAX_VULKAN_DIR}/" DESTINATION "${AL_ROOT}/vulkan")
 endif()
 
+# The pinned upstream TrinityALForward.h predates the Vulkan backend and
+# has no TRINITY_VULKAN platform branch, which fails the Vulkan target
+# with "Missing TrinityAL platform description". Apply the Ithax Vulkan
+# patch set (platform branch, readback invalidation, FSR1 Vulkan guards)
+# in place; the patch is idempotent so a pre-patched tree is left
+# untouched.
+set(TRINITY_PATCH_FILE "${REPO_ROOT}/cmake/patches/trinityal-vulkan.patch")
+set(TRINITY_PATCH_MARKER "${AL_ROOT}/include/TrinityALForward.h")
+file(READ "${TRINITY_PATCH_MARKER}" TRINITY_PATCH_CONTENT)
+if(NOT TRINITY_PATCH_CONTENT MATCHES "TRINITY_VULKAN")
+    execute_process(
+        COMMAND git apply --whitespace=nowarn
+            --directory=external/trinity
+            "${TRINITY_PATCH_FILE}"
+        WORKING_DIRECTORY "${REPO_ROOT}"
+        RESULT_VARIABLE TRINITY_PATCH_RESULT
+        OUTPUT_QUIET ERROR_QUIET
+    )
+    if(NOT TRINITY_PATCH_RESULT EQUAL 0)
+        message(FATAL_ERROR
+            "Failed to apply the TrinityAL Vulkan patch set: "
+            "${TRINITY_PATCH_RESULT}")
+    endif()
+endif()
+
 find_package(carbon-core CONFIG REQUIRED)
 find_package(carbon-imageio CONFIG REQUIRED)
 find_package(nvidia-aftermath CONFIG REQUIRED)

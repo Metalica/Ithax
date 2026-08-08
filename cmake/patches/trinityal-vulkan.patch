@@ -1,0 +1,188 @@
+diff --git a/trinityal/dx11/Tr2TextureALDx11.cpp b/trinityal/dx11/Tr2TextureALDx11.cpp
+--- a/trinityal/dx11/Tr2TextureALDx11.cpp
++++ b/trinityal/dx11/Tr2TextureALDx11.cpp
+@@ -888,6 +888,13 @@ void Tr2TextureAL::UnmapForReading( Tr2RenderContextAL& renderContext )
+ 	}
+ }
+ 
++ALResult Tr2TextureAL::InvalidateReadback( Tr2RenderContextAL& renderContext )
++{
++	(void)renderContext;
++	// D3D11 staging resources are coherent; nothing to invalidate.
++	return S_OK;
++}
++
+ ALResult Tr2TextureAL::MapForWriting( const Tr2TextureSubresource& region, void*& data, uint32_t& pitch, Tr2RenderContextAL& renderContext )
+ {
+ 	data = nullptr;
+diff --git a/trinityal/dx11/Tr2TextureALDx11.h b/trinityal/dx11/Tr2TextureALDx11.h
+--- a/trinityal/dx11/Tr2TextureALDx11.h
++++ b/trinityal/dx11/Tr2TextureALDx11.h
+@@ -45,6 +45,7 @@ public:
+ 	}
+ 	ALResult MapForReading( const Tr2TextureSubresource& region, bool synchronize, const void*& data, uint32_t& pitch, Tr2RenderContextAL& renderContext );
+ 	void UnmapForReading( Tr2RenderContextAL& renderContext );
++	ALResult InvalidateReadback( Tr2RenderContextAL& renderContext );
+ 	ALResult MapForWriting( const Tr2TextureSubresource& region, void*& data, uint32_t& pitch, Tr2RenderContextAL& renderContext );
+ 	void UnmapForWriting( Tr2RenderContextAL& renderContext );
+ 
+diff --git a/trinityal/dx12/Tr2TextureALDx12.cpp b/trinityal/dx12/Tr2TextureALDx12.cpp
+--- a/trinityal/dx12/Tr2TextureALDx12.cpp
++++ b/trinityal/dx12/Tr2TextureALDx12.cpp
+@@ -1563,6 +1563,13 @@ void Tr2TextureAL::UnmapForReading( Tr2RenderContextAL& )
+ 	}
+ }
+ 
++ALResult Tr2TextureAL::InvalidateReadback( Tr2RenderContextAL& renderContext )
++{
++	(void)renderContext;
++	// D3D12 readback resources are coherent; nothing to invalidate.
++	return S_OK;
++}
++
+ ALResult Tr2TextureAL::UpdateSubresource( const Tr2TextureSubresource& region, const void* source, uint32_t pitch, uint32_t depthPitch, Tr2RenderContextAL& renderContext )
+ {
+ 	if( !IsValid() )
+diff --git a/trinityal/dx12/Tr2TextureALDx12.h b/trinityal/dx12/Tr2TextureALDx12.h
+--- a/trinityal/dx12/Tr2TextureALDx12.h
++++ b/trinityal/dx12/Tr2TextureALDx12.h
+@@ -52,6 +52,7 @@ public:
+ 	}
+ 	ALResult MapForReading( const Tr2TextureSubresource& region, bool synchronize, const void*& data, uint32_t& pitch, Tr2RenderContextAL& renderContext );
+ 	void UnmapForReading( Tr2RenderContextAL& renderContext );
++	ALResult InvalidateReadback( Tr2RenderContextAL& renderContext );
+ 	ALResult MapForWriting( const Tr2TextureSubresource& region, void*& data, uint32_t& pitch, Tr2RenderContextAL& renderContext );
+ 	void UnmapForWriting( Tr2RenderContextAL& renderContext );
+ 
+diff --git a/trinityal/include/Tr2TextureAL.h b/trinityal/include/Tr2TextureAL.h
+--- a/trinityal/include/Tr2TextureAL.h
++++ b/trinityal/include/Tr2TextureAL.h
+@@ -56,6 +56,7 @@ public:
+ 	ALResult MapForReading( const Tr2TextureSubresource& region, const void*& data, uint32_t& pitch, Tr2RenderContextAL& renderContext );
+ 	ALResult MapForReading( const Tr2TextureSubresource& region, bool synchronize, const void*& data, uint32_t& pitch, Tr2RenderContextAL& renderContext );
+ 	void UnmapForReading( Tr2RenderContextAL& renderContext );
++	ALResult InvalidateReadback( Tr2RenderContextAL& renderContext );
+ 	ALResult MapForWriting( const Tr2TextureSubresource& region, void*& data, uint32_t& pitch, Tr2RenderContextAL& renderContext );
+ 	void UnmapForWriting( Tr2RenderContextAL& renderContext );
+ 
+diff --git a/trinityal/include/TrinityALForward.h b/trinityal/include/TrinityALForward.h
+--- a/trinityal/include/TrinityALForward.h
++++ b/trinityal/include/TrinityALForward.h
+@@ -10,6 +10,7 @@
+ #define TRINITY_STUB 5
+ #define TRINITY_DIRECTX12 6
+ #define TRINITY_METAL 10
++#define TRINITY_VULKAN 11
+ 
+ #ifndef TRINITY_PLATFORM
+ #error TRINITY_PLATFORM must be set
+@@ -82,6 +83,18 @@
+ #define TRINITY_PLATFORM_SYMBOL_SUFFIX Metal
+ #define TRINITY_PLATFORM_NAME "metal"
+ 
++#elif TRINITY_PLATFORM == TRINITY_VULKAN
++
++#define TRINITY_PLATFORM_SYMBOL vulkan
++#define TRINITY_PLATFORM_SYMBOL_SUFFIX Vulkan
++#define TRINITY_PLATFORM_NAME "vulkan"
++
++#ifdef _WIN32
++#define VK_USE_PLATFORM_WIN32_KHR
++#endif
++
++#include <vulkan/vulkan.h>
++
+ #else
+ 
+ #error Missing TrinityAL platform description
+diff --git a/trinityal/include/upscaling/Tr2Fsr1Upscaling.h b/trinityal/include/upscaling/Tr2Fsr1Upscaling.h
+--- a/trinityal/include/upscaling/Tr2Fsr1Upscaling.h
++++ b/trinityal/include/upscaling/Tr2Fsr1Upscaling.h
+@@ -2,7 +2,7 @@
+ 
+ #pragma once
+ 
+-#if TRINITY_PLATFORM != TRINITY_STUB
++#if TRINITY_PLATFORM != TRINITY_STUB && TRINITY_PLATFORM != TRINITY_VULKAN
+ 
+ #include "Tr2UpscalingAL.h"
+ #include "Tr2RenderContextAL.h"
+diff --git a/trinityal/metal/Tr2TextureALMetal.h b/trinityal/metal/Tr2TextureALMetal.h
+--- a/trinityal/metal/Tr2TextureALMetal.h
++++ b/trinityal/metal/Tr2TextureALMetal.h
+@@ -34,6 +34,7 @@ public:
+ 	}
+ 	ALResult MapForReading( const Tr2TextureSubresource& region, bool synchronize, const void*& data, uint32_t& pitch, Tr2RenderContextAL& renderContext );
+ 	void UnmapForReading( Tr2RenderContextAL& renderContext );
++	ALResult InvalidateReadback( Tr2RenderContextAL& renderContext );
+ 	ALResult MapForWriting( const Tr2TextureSubresource& region, void*& data, uint32_t& pitch, Tr2RenderContextAL& renderContext );
+ 	void UnmapForWriting( Tr2RenderContextAL& renderContext );
+ 
+diff --git a/trinityal/metal/Tr2TextureALMetal.mm b/trinityal/metal/Tr2TextureALMetal.mm
+--- a/trinityal/metal/Tr2TextureALMetal.mm
++++ b/trinityal/metal/Tr2TextureALMetal.mm
+@@ -499,6 +499,12 @@ void Tr2TextureAL::UnmapForReading( Tr2RenderContextAL& renderContext )
+ 	m_dataLayout.m_sysMemSlicePitch = 0;
+ }
+ 
++ALResult Tr2TextureAL::InvalidateReadback( Tr2RenderContextAL& renderContext )
++{
++	(void)renderContext;
++	return S_OK;
++}
++
+ ALResult Tr2TextureAL::MapForWriting( const Tr2TextureSubresource& region,
+ 									  void*& data,
+ 									  uint32_t& pitch,
+diff --git a/trinityal/src/Tr2TextureAL.cpp b/trinityal/src/Tr2TextureAL.cpp
+--- a/trinityal/src/Tr2TextureAL.cpp
++++ b/trinityal/src/Tr2TextureAL.cpp
+@@ -167,6 +167,11 @@ void Tr2TextureAL::UnmapForReading( Tr2RenderContextAL& renderContext )
+ 	m_texture->UnmapForReading( renderContext );
+ }
+ 
++ALResult Tr2TextureAL::InvalidateReadback( Tr2RenderContextAL& renderContext )
++{
++	return m_texture->InvalidateReadback( renderContext );
++}
++
+ ALResult Tr2TextureAL::MapForWriting( const Tr2TextureSubresource& region, void*& data, uint32_t& pitch, Tr2RenderContextAL& renderContext )
+ {
+ 	return m_texture->MapForWriting( region, data, pitch, renderContext );
+diff --git a/trinityal/src/upscaling/Tr2Fsr1Upscaling.cpp b/trinityal/src/upscaling/Tr2Fsr1Upscaling.cpp
+--- a/trinityal/src/upscaling/Tr2Fsr1Upscaling.cpp
++++ b/trinityal/src/upscaling/Tr2Fsr1Upscaling.cpp
+@@ -1,6 +1,6 @@
+ // Copyright © 2024 CCP ehf.
+ 
+-#if TRINITY_PLATFORM != TRINITY_STUB
++#if TRINITY_PLATFORM != TRINITY_STUB && TRINITY_PLATFORM != TRINITY_VULKAN
+ 
+ #include "StdAfx.h"
+ #include "include/upscaling/Tr2Fsr1Upscaling.h"
+diff --git a/trinityal/stub/Tr2TextureALStub.cpp b/trinityal/stub/Tr2TextureALStub.cpp
+--- a/trinityal/stub/Tr2TextureALStub.cpp
++++ b/trinityal/stub/Tr2TextureALStub.cpp
+@@ -183,6 +183,11 @@ void Tr2TextureAL::UnmapForReading( Tr2RenderContextAL& )
+ 	}
+ }
+ 
++ALResult Tr2TextureAL::InvalidateReadback( Tr2RenderContextAL& )
++{
++	return S_OK;
++}
++
+ ALResult Tr2TextureAL::MapForWriting( const Tr2TextureSubresource& region, void*& data, uint32_t& pitch, Tr2RenderContextAL& renderContext )
+ {
+ 	data = nullptr;
+diff --git a/trinityal/stub/Tr2TextureALStub.h b/trinityal/stub/Tr2TextureALStub.h
+--- a/trinityal/stub/Tr2TextureALStub.h
++++ b/trinityal/stub/Tr2TextureALStub.h
+@@ -31,6 +31,7 @@ public:
+ 	}
+ 	ALResult MapForReading( const Tr2TextureSubresource& region, bool synchronize, const void*& data, uint32_t& pitch, Tr2RenderContextAL& renderContext );
+ 	void UnmapForReading( Tr2RenderContextAL& renderContext );
++	ALResult InvalidateReadback( Tr2RenderContextAL& renderContext );
+ 	ALResult MapForWriting( const Tr2TextureSubresource& region, void*& data, uint32_t& pitch, Tr2RenderContextAL& renderContext );
+ 	void UnmapForWriting( Tr2RenderContextAL& renderContext );
+ 
